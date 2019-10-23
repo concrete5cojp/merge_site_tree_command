@@ -150,6 +150,7 @@ class MergeSiteTreeCommand extends Command
         }
 
         $sourcePageList = new PageList();
+        $sourcePageList->setSiteTreeToAll();
         $sourcePageList->ignorePermissions();
         $sourcePageList->includeSystemPages();
         if ($this->sourceTreePath !== '/' && !empty($this->sourceTreePath)) {
@@ -189,6 +190,7 @@ class MergeSiteTreeCommand extends Command
         }
 
         $targetPageList = new PageList();
+        $targetPageList->setSiteTreeToAll();
         $targetPageList->ignorePermissions();
         $sourcePageList->includeSystemPages();
         if ($this->targetTreePath !== '/' && !empty($this->targetTreePath)) {

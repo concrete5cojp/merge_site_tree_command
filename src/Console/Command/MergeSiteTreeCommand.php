@@ -40,6 +40,10 @@ class MergeSiteTreeCommand extends Command
      */
     protected $forceUnapproved = false;
     /**
+     * @var bool
+     */
+    protected $includeAllSites = false;
+    /**
      * @var array
      */
     protected $merged = [];
@@ -110,6 +114,11 @@ class MergeSiteTreeCommand extends Command
             $this->includeChildPages = $helper->ask($input, $output, $question);
             $table->addRow(['Include Child Pages', ($this->includeChildPages) ? 'Yes' : 'No']);
 
+            // Include all sites
+            $question = new ConfirmationQuestion('Do you want to get pages from all sites? [Y]es / [N]o: ', $this->includeChildPages);
+            $this->includeAllSites = $helper->ask($input, $output, $question);
+            $table->addRow(['Include All Sites', ($this->includeAllSites) ? 'Yes' : 'No']);
+
             // Options override, copy
             $question = new ChoiceQuestion(
                 'What do you wish to do when a page with same handle name already exists? (defaults to replace)',
@@ -150,7 +159,9 @@ class MergeSiteTreeCommand extends Command
         }
 
         $sourcePageList = new PageList();
-        $sourcePageList->setSiteTreeToAll();
+        if ($this->includeAllSites) {
+            $sourcePageList->setSiteTreeToAll();
+        }
         $sourcePageList->ignorePermissions();
         $sourcePageList->includeSystemPages();
         if ($this->sourceTreePath !== '/' && !empty($this->sourceTreePath)) {
@@ -190,7 +201,9 @@ class MergeSiteTreeCommand extends Command
         }
 
         $targetPageList = new PageList();
-        $targetPageList->setSiteTreeToAll();
+        if ($this->includeAllSites) {
+            $targetPageList->setSiteTreeToAll();
+        }
         $targetPageList->ignorePermissions();
         $sourcePageList->includeSystemPages();
         if ($this->targetTreePath !== '/' && !empty($this->targetTreePath)) {

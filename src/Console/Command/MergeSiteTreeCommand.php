@@ -39,6 +39,10 @@ class MergeSiteTreeCommand extends Command
      * @var bool
      */
     protected $forceUnapproved = false;
+    /**
+     * @var array
+     */
+    protected $merged = [];
 
     /**
      * {@inheritdoc}
@@ -63,7 +67,11 @@ class MergeSiteTreeCommand extends Command
             return $answer;
         };
         $pagePathValidator = function ($answer) {
-            $p = Page::getByPath($answer);
+            if ($answer === '/') {
+                $p = Page::getByID(Page::getHomePageID());
+            } else {
+                $p = Page::getByPath($answer);
+            }
             if (!is_object($p) || $p->isError()) {
                 throw new \RuntimeException(sprintf('The page %s is not existed: ', $answer));
             }
@@ -132,57 +140,78 @@ class MergeSiteTreeCommand extends Command
     {
         $sourcePages = [];
 
-        $sourceParent = Page::getByPath($this->sourceTreePath);
+        if ($this->sourceTreePath === '/' || empty($this->sourceTreePath)) {
+            $sourceParent = Page::getByID(Page::getHomePageID());
+        } else {
+            $sourceParent = Page::getByPath($this->sourceTreePath);
+        }
         if (!is_object($sourceParent) || $sourceParent->isError()) {
             throw new \RuntimeException('Invalid Sitemap Tree.');
         }
 
         $sourcePageList = new PageList();
         $sourcePageList->ignorePermissions();
-        $sourcePageList->includeInactivePages();
         $sourcePageList->includeSystemPages();
-        if ($this->includeChildPages) {
-            $sourcePageList->filterByPath($this->sourceTreePath, true);
-        } else {
-            $sourcePageList->filterByParentID($sourceParent->getCollectionID());
+        if ($this->sourceTreePath !== '/' && !empty($this->sourceTreePath)) {
+            if ($this->includeChildPages) {
+                $sourcePageList->filterByPath($this->sourceTreePath, true);
+            } else {
+                $sourcePageList->filterByParentID($sourceParent->getCollectionID());
+            }
         }
         $results = $sourcePageList->getResults();
 
         /** @var Page $result */
         foreach ($results as $result) {
-            $relativePath = substr($result->getCollectionPath(), strlen($this->sourceTreePath));
-            $sourcePages[$relativePath] = $result;
+            if (!$result->isHomePage() && !$result->isError()) {
+                if ($this->sourceTreePath === '/' || empty($this->sourceTreePath)) {
+                    $relativePath = $result->getCollectionPath();
+                } else {
+                    $relativePath = substr($result->getCollectionPath(), strlen($this->sourceTreePath));
+                }
+                $sourcePages[$relativePath] = $result;
+            }
         }
 
         uksort($sourcePages, function ($a, $b) {
-            return strlen($b) - strlen($a);
+            return strlen($a) - strlen($b);
         });
-
-        $progressBar = new ProgressBar($output, count($sourcePages));
 
         $targetPages = [];
 
-        $targetParent = Page::getByPath($this->targetTreePath);
+        if ($this->targetTreePath === '/' || empty($this->targetTreePath)) {
+            $targetParent = Page::getByID(Page::getHomePageID());
+        } else {
+            $targetParent = Page::getByPath($this->targetTreePath);
+        }
         if (!is_object($targetParent) || $targetParent->isError()) {
             throw new \RuntimeException('Invalid Sitemap Tree.');
         }
 
         $targetPageList = new PageList();
         $targetPageList->ignorePermissions();
-        $sourcePageList->includeInactivePages();
         $sourcePageList->includeSystemPages();
-        if ($this->includeChildPages) {
-            $targetPageList->filterByPath($this->targetTreePath, true);
-        } else {
-            $targetPageList->filterByParentID($targetParent->getCollectionID());
+        if ($this->targetTreePath !== '/' && !empty($this->targetTreePath)) {
+            if ($this->includeChildPages) {
+                $targetPageList->filterByPath($this->targetTreePath, true);
+            } else {
+                $targetPageList->filterByParentID($targetParent->getCollectionID());
+            }
         }
         $results = $targetPageList->getResults();
 
         /** @var Page $result */
         foreach ($results as $result) {
-            $relativePath = substr($result->getCollectionPath(), strlen($this->targetTreePath));
+            if ($this->targetTreePath === '/' || empty($this->targetTreePath)) {
+                $relativePath = $result->getCollectionPath();
+            } else {
+                $relativePath = substr($result->getCollectionPath(), strlen($this->targetTreePath));
+            }
             $targetPages[$relativePath] = $result;
         }
+
+        $output->writeln('Merge Process Started...');
+        $progressBar = new ProgressBar($output, count($sourcePages));
 
         /** @var Page $source */
         foreach ($sourcePages as $path => $source) {
@@ -195,7 +224,29 @@ class MergeSiteTreeCommand extends Command
         }
 
         $progressBar->finish();
-        $output->writeln(' Finished.');
+        $output->writeln('');
+
+        if (count($this->merged) > 0) {
+            $output->writeln('Cleanup Process Started...');
+            $progressBar = new ProgressBar($output, count($this->merged));
+
+            uksort($this->merged, function ($a, $b) {
+                return strlen($b) - strlen($a);
+            });
+
+            /** @var Page $merged */
+            foreach ($this->merged as $merged) {
+                if ($merged->getCollectionID() !== Page::getHomePageID() && !$merged->isMasterCollection()) {
+                    $merged->moveToTrash();
+                }
+                $progressBar->advance();
+            }
+
+            $progressBar->finish();
+            $output->writeln('');
+        }
+
+        $output->writeln('Finished.');
     }
 
     /**
@@ -218,7 +269,7 @@ class MergeSiteTreeCommand extends Command
                     ->setVersionComments(t('Copied from %s', $source->getCollectionPath()));
                 $cloner->cloneCollectionVersion($originalVersion, $target, $clonerOptions);
                 if ($source) {
-                    $source->moveToTrash();
+                    $this->merged[$source->getCollectionPath()] = $source;
                 }
                 break;
             case 'stop':
@@ -239,7 +290,11 @@ class MergeSiteTreeCommand extends Command
         $path = $this->targetTreePath . $path;
         $c = Page::getByPath($path);
         if (!is_object($c) || $c->isError()) {
-            $parent = Page::getByPath(dirname($path));
+            if (dirname($path) === '/' || empty(dirname($path))) {
+                $parent = Page::getByID(Page::getHomePageID());
+            } else {
+                $parent = Page::getByPath(dirname($path));
+            }
             if (is_object($parent) && !$parent->isError()) {
                 $source->move($parent);
             }

@@ -251,7 +251,7 @@ class MergeSiteTreeCommand extends Command
 
             /** @var Page $merged */
             foreach ($this->merged as $merged) {
-                if ($merged->getCollectionID() !== Page::getHomePageID() && !$merged->isMasterCollection()) {
+                if ($merged->getCollectionID() !== Page::getHomePageID() && !$merged->isMasterCollection() && count($merged->getCollectionChildrenArray(true)) === 0) {
                     $merged->moveToTrash();
                 }
                 $progressBar->advance();

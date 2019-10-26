@@ -205,7 +205,7 @@ class MergeSiteTreeCommand extends Command
             $targetPageList->setSiteTreeToAll();
         }
         $targetPageList->ignorePermissions();
-        $sourcePageList->includeSystemPages();
+        $targetPageList->includeSystemPages();
         if ($this->targetTreePath !== '/' && !empty($this->targetTreePath)) {
             if ($this->includeChildPages) {
                 $targetPageList->filterByPath($this->targetTreePath, true);
@@ -302,7 +302,9 @@ class MergeSiteTreeCommand extends Command
      */
     protected function movePage(Page $source, $path)
     {
-        $path = $this->targetTreePath . $path;
+        if ($this->targetTreePath !== '/' && !empty($this->targetTreePath)) {
+            $path = $this->targetTreePath . $path;
+        }
         $c = Page::getByPath($path);
         if (!is_object($c) || $c->isError()) {
             if (dirname($path) === '/' || empty(dirname($path))) {
